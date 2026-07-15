@@ -9,8 +9,17 @@ import base64
 import time
 
 User = get_user_model()
-openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY", "dummy_key"))
-ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "dummy_key")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+if not OPENROUTER_API_KEY:
+    raise ValueError("OPENROUTER_API_KEY must be set in the environment")
+
+openai_client = AsyncOpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=OPENROUTER_API_KEY
+)
+ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY")
+if not ELEVENLABS_API_KEY:
+    raise ValueError("ELEVENLABS_API_KEY must be set in the environment")
 
 SYSTEM_PROMPT = """
 You are an empathetic, professional, and friendly female matrimonial assistant named 'Priya'.
@@ -61,7 +70,7 @@ class AvatarOnboardingConsumer(AsyncWebsocketConsumer):
         # 2. Call LLM
         try:
             response = await openai_client.chat.completions.create(
-                model="gpt-4o",
+                model="meta-llama/llama-3-8b-instruct",
                 messages=state
             )
             bot_reply = response.choices[0].message.content

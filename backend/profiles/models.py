@@ -20,6 +20,8 @@ class Profile(models.Model):
     income_bracket = models.CharField(max_length=100, blank=True, null=True)
     location_city = models.CharField(max_length=100, blank=True, null=True)
     location_country = models.CharField(max_length=100, blank=True, null=True)
+    hobbies = models.TextField(blank=True, null=True)
+    family_details = models.TextField(blank=True, null=True)
     raw_biodata_text = models.TextField(blank=True, null=True)
 
     def __str__(self):
