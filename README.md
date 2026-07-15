@@ -24,6 +24,99 @@ This project is currently in **active development mode**. We are building a deco
 *   **Search Engine:** Basic searching and filtering logic for profiles.
 *   **Real-time Chat:** Django Channels ASGI configuration supporting WebSocket connections, alongside REST APIs to start sessions and fetch message history.
 
+## Architecture & System Flow
+
+```mermaid
+graph TD
+    Client[Next.js Frontend]
+    
+    sublayer[Django Backend]
+        REST[REST APIs]
+        WS[WebSockets - Django Channels]
+        DB[(SQLite Database)]
+        LLM[OpenAI/Vision API]
+    end
+
+    Client -- HTTP Requests --> REST
+    Client -- ws:// --> WS
+    
+    REST -- Upload BioData --> LLM
+    LLM -- JSON Output --> REST
+    
+    REST -- Read/Write --> DB
+    WS -- Real-time Messages --> DB
+```
+
+## Database Schema (ER Diagram)
+
+```mermaid
+erDiagram
+    USER ||--o{ OTP_VERIFICATION : "requests"
+    USER ||--o| PROFILE : "has"
+    USER ||--o{ CHAT_SESSION : "participates (as user_one or user_two)"
+    USER ||--o{ CHAT_MESSAGE : "sends"
+    
+    PROFILE ||--o| PREFERENCE : "has matchmaking"
+    PROFILE ||--o{ PHOTO : "has multiple"
+    
+    CHAT_SESSION ||--o{ CHAT_MESSAGE : "contains"
+    
+    USER {
+        int id PK
+        string phone_number
+        boolean is_verified
+    }
+    
+    OTP_VERIFICATION {
+        int id PK
+        int user_id FK
+        string otp_code
+        boolean is_used
+        datetime expires_at
+    }
+    
+    PROFILE {
+        uuid id PK
+        int user_id FK
+        string full_name
+        string gender
+        string hobbies
+        text family_details
+        string occupation
+    }
+    
+    PREFERENCE {
+        uuid id PK
+        uuid profile_id FK
+        int min_age
+        int max_age
+        string preferred_religion
+    }
+    
+    PHOTO {
+        uuid id PK
+        uuid profile_id FK
+        string image_url
+        boolean is_primary
+    }
+    
+    CHAT_SESSION {
+        uuid id PK
+        int user_one_id FK
+        int user_two_id FK
+        datetime created_at
+    }
+    
+    CHAT_MESSAGE {
+        uuid id PK
+        uuid session_id FK
+        int sender_id FK
+        text message_content
+        boolean is_read
+        datetime sent_at
+    }
+```
+
 ## Getting Started (Local Development)
 
 ### Prerequisites
