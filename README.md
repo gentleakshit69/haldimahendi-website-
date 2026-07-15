@@ -30,7 +30,7 @@ This project is currently in **active development mode**. We are building a deco
 graph TD
     Client[Next.js Frontend]
     
-    sublayer[Django Backend]
+    subgraph DjangoBackend ["Django Backend"]
         REST[REST APIs]
         WS[WebSockets - Django Channels]
         DB[(SQLite Database)]
