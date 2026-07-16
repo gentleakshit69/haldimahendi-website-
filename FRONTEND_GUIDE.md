@@ -61,6 +61,13 @@ Based on the current APIs, the frontend needs the following pages/flows:
       "status": "OTP sent successfully."
     }
     ```
+*   **Error Response (500 Internal Server Error):**
+    ```json
+    {
+      "error": "Failed to send SMS OTP. Please try again later."
+    }
+    ```
+    *(Note: This endpoint is now fully integrated with the smsmedia.org gateway. Real SMS messages are dispatched. A 500 error will be thrown if the gateway is unreachable or fails to send.)*
 
 ### 2. Authentication: Verify OTP
 *   **Endpoint:** `POST /auth/verify-otp/`

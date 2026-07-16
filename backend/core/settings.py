@@ -150,3 +150,12 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# SMS API Config
+SMS_API_URL = os.environ.get('SMS_API_URL')
+SMS_API_KEY = os.environ.get('SMS_API_KEY')
+SMS_API_CAMPAIGN = os.environ.get('SMS_API_CAMPAIGN')
+SMS_API_ROUTE_ID = os.environ.get('SMS_API_ROUTE_ID')
+SMS_API_SENDER_ID = os.environ.get('SMS_API_SENDER_ID')
+SMS_API_TEMPLATE_ID = os.environ.get('SMS_API_TEMPLATE_ID')
+SMS_API_PE_ID = os.environ.get('SMS_API_PE_ID')

@@ -129,8 +129,18 @@ erDiagram
 1.  Navigate to the `backend` directory.
 2.  Activate the virtual environment: `.\venv\Scripts\activate` (Windows)
 3.  Install dependencies (if new ones were added): `pip install -r requirements.txt`
-4.  Run migrations: `python manage.py migrate`
-5.  Start the server: `python manage.py runserver`
+4.  Create a `.env` file in the `backend/` directory and configure the SMS API credentials:
+    ```env
+    SMS_API_URL=https://login.smsmedia.org/app/smsapi/index.php
+    SMS_API_KEY=your_key
+    SMS_API_CAMPAIGN=your_campaign
+    SMS_API_ROUTE_ID=your_route
+    SMS_API_SENDER_ID=your_senderid
+    SMS_API_TEMPLATE_ID=your_template_id
+    SMS_API_PE_ID=your_pe_id
+    ```
+5.  Run migrations: `python manage.py migrate`
+6.  Start the server: `python manage.py runserver`
 
 ### Frontend Setup
 

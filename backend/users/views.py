@@ -4,8 +4,13 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from django.utils import timezone
+from django.conf import settings
 from .models import User, OTPVerification
 from rest_framework_simplejwt.tokens import RefreshToken
+import requests
+import logging
+
+logger = logging.getLogger(__name__)
 
 def generate_otp():
     return str(random.randint(100000, 999999))
@@ -28,8 +33,33 @@ def send_otp(request):
     # Create new OTP
     OTPVerification.objects.create(user=user, otp_code=otp_code)
     
-    # Dummy print to simulate sending SMS
-    print(f"--- MOCK SMS --- Sent OTP {otp_code} to {phone_number}")
+    # Prepare SMS API payload
+    msg_template = f"Dear Member, Your client login account OTP is {otp_code} It will expire in Five minutes. Do not share it with anyone. Thanks, -Webczar"
+    
+    params = {
+        'key': settings.SMS_API_KEY,
+        'campaign': settings.SMS_API_CAMPAIGN,
+        'routeid': settings.SMS_API_ROUTE_ID,
+        'type': 'text',
+        'contacts': phone_number,
+        'senderid': settings.SMS_API_SENDER_ID,
+        'msg': msg_template,
+        'template_id': settings.SMS_API_TEMPLATE_ID,
+        'pe_id': settings.SMS_API_PE_ID
+    }
+
+    try:
+        response = requests.get(settings.SMS_API_URL, params=params, timeout=10)
+        response.raise_for_status()
+        # Optionally, check response.text if the provider returns 200 but has a logic error in text.
+        logger.info(f"Successfully sent OTP to {phone_number}. SMS provider response: {response.text}")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to send OTP to {phone_number}. Error: {str(e)}")
+        # Return 500 error per design
+        return Response(
+            {'error': 'Failed to send SMS OTP. Please try again later.'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
     return Response({'status': 'OTP sent successfully.'}, status=status.HTTP_200_OK)
 
