@@ -47,9 +47,14 @@ class User(AbstractBaseUser, PermissionsMixin):
 class OTPVerification(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='otps')
-    otp_code = models.CharField(max_length=6)
+    otp_hash = models.CharField(max_length=128)
     expires_at = models.DateTimeField()
     is_used = models.BooleanField(default=False)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['user', 'is_used', '-expires_at']),
+        ]
 
     def save(self, *args, **kwargs):
         if not self.expires_at:
@@ -57,4 +62,4 @@ class OTPVerification(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.user.phone_number} - {self.otp_code}"
+        return f"{self.user.phone_number} - OTP Record"

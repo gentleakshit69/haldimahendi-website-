@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.conf import settings
 from .models import User, OTPVerification
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth.hashers import make_password, check_password
 import requests
 import logging
 
@@ -30,8 +31,8 @@ def send_otp(request):
     # Invalidate old OTPs
     OTPVerification.objects.filter(user=user, is_used=False).update(is_used=True)
     
-    # Create new OTP
-    OTPVerification.objects.create(user=user, otp_code=otp_code)
+    # Create new OTP (hashed)
+    OTPVerification.objects.create(user=user, otp_hash=make_password(otp_code))
     
     # Prepare SMS API payload
     msg_template = f"Dear Member, Your client login account OTP is {otp_code} It will expire in Five minutes. Do not share it with anyone. Thanks, -Webczar"
@@ -76,12 +77,11 @@ def verify_otp(request):
         user = User.objects.get(phone_number=phone_number)
         otp_record = OTPVerification.objects.filter(
             user=user, 
-            otp_code=otp_code, 
             is_used=False,
             expires_at__gt=timezone.now()
-        ).first()
+        ).order_by('-expires_at').first()
         
-        if not otp_record:
+        if not otp_record or not check_password(otp_code, otp_record.otp_hash):
             return Response({'error': 'Invalid or expired OTP.'}, status=status.HTTP_400_BAD_REQUEST)
             
         # Mark as used
