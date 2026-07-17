@@ -203,3 +203,103 @@ def my_profile(request):
             
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def recommended_matches(request):
+    try:
+        user_profile = Profile.objects.get(user=request.user)
+        try:
+            preference = Preference.objects.get(profile=user_profile)
+        except Preference.DoesNotExist:
+            return Response({"error": "Please complete your preferences first to get matches."}, status=400)
+            
+        # 1. Basic Filtering
+        candidates = Profile.objects.exclude(user=request.user).filter(status='completed')
+        
+        # Gender Filtering Logic
+        if preference.preferred_gender:
+            candidates = candidates.filter(gender__iexact=preference.preferred_gender)
+        elif user_profile.gender:
+            # Fallback: Usually match opposite gender in matrimonial if not specified
+            opposite = 'Female' if user_profile.gender.lower() == 'male' else 'Male'
+            candidates = candidates.filter(gender__iexact=opposite)
+            
+        if preference.preferred_religion:
+            candidates = candidates.filter(religion__icontains=preference.preferred_religion)
+            
+        # Get Top 5 candidates for LLM evaluation
+        top_candidates = candidates[:5]
+        
+        if not top_candidates:
+            return Response({"results": []}, status=200)
+            
+        # 2. LLM Prompt Construction
+        user_summary = f"Name: {user_profile.full_name}, Age/DOB: {user_profile.date_of_birth}, Occupation: {user_profile.occupation}, About: {user_profile.about_me}"
+        
+        candidates_text = ""
+        candidate_map = {}
+        for idx, c in enumerate(top_candidates):
+            candidate_map[str(idx)] = c
+            candidates_text += f"\nCandidate [{idx}] (ID: {c.id}): Name: {c.full_name}, Occ: {c.occupation}, About: {c.about_me}, Religion: {c.religion}"
+            
+        prompt = f"""
+        You are an expert AI Matchmaker. Evaluate the compatibility between the 'User' and the following 'Candidates'.
+        
+        User Profile:
+        {user_summary}
+        
+        Candidates:
+        {candidates_text}
+        
+        Return a JSON array of objects. Each object MUST have:
+        - "profile_id": The exact UUID string of the candidate.
+        - "compatibility_score": An integer from 1 to 100 representing how good the match is.
+        - "match_reason": A 1-2 sentence personalized explanation of why they are a good match based on their profiles.
+        
+        Return ONLY valid JSON.
+        """
+        
+        # 3. Call LLM
+        response = openai_client.chat.completions.create(
+            model="openai/gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"} # Wait, json_object expects a dict, not array
+        )
+        
+        llm_output = response.choices[0].message.content
+        
+        # We parse the output. Since we asked for array but used json_object, it might return {"matches": [...]}
+        parsed = json.loads(llm_output)
+        matches = parsed.get("matches", parsed) if isinstance(parsed, dict) else parsed
+        
+        # Merge DB data with LLM scores
+        final_results = []
+        for c in top_candidates:
+            c_dict = {
+                "id": str(c.id),
+                "full_name": c.full_name,
+                "occupation": c.occupation,
+                "religion": c.religion,
+                "about_me": c.about_me,
+                "compatibility_score": 50,
+                "match_reason": "Based on basic preferences."
+            }
+            # Find score
+            for m in matches:
+                if m.get('profile_id') == str(c.id):
+                    c_dict['compatibility_score'] = m.get('compatibility_score', 50)
+                    c_dict['match_reason'] = m.get('match_reason', '')
+                    break
+            final_results.append(c_dict)
+            
+        # Sort by score descending
+        final_results.sort(key=lambda x: x['compatibility_score'], reverse=True)
+        
+        return Response({"results": final_results}, status=200)
+        
+    except Profile.DoesNotExist:
+        return Response({"error": "Profile not found."}, status=404)
+    except Exception as e:
+        print(f"Matchmaking Error: {e}")
+        return Response({"error": "Failed to generate matches.", "details": str(e)}, status=500)

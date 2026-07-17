@@ -25,7 +25,7 @@ SYSTEM_PROMPT = """
 You are an empathetic, professional, and friendly female matrimonial assistant named 'Priya'.
 Your job is to interview the user and collect all necessary details to build their matrimonial profile.
 You should ask ONE question at a time. Be conversational, psychologically encouraging, and polite.
-Required details to collect: Full Name, Date of Birth, Profession, Height, Religion/Caste, and Partner Expectations.
+Required details to collect: Full Name, Gender, Date of Birth, Profession, Height, Religion/Caste, Partner Expectations, and Preferred Partner Gender.
 
 CRITICAL INSTRUCTION: As soon as the user provides ANY of the required details (even partially, like just their name or profession), you MUST immediately call the 'update_profile' function to save that data before you respond with your next question.
 Once you have collected all these details, kindly let them know the profile is complete.
@@ -100,11 +100,13 @@ class AvatarOnboardingConsumer(AsyncWebsocketConsumer):
                         "type": "object",
                         "properties": {
                             "full_name": {"type": "string"},
+                            "gender": {"type": "string"},
                             "occupation": {"type": "string"},
                             "date_of_birth": {"type": "string", "description": "YYYY-MM-DD"},
                             "height": {"type": "string"},
                             "religion": {"type": "string"},
-                            "expectations": {"type": "string"}
+                            "expectations": {"type": "string"},
+                            "preferred_gender": {"type": "string"}
                         }
                     }
                 }
@@ -198,16 +200,23 @@ class AvatarOnboardingConsumer(AsyncWebsocketConsumer):
 
     @sync_to_async
     def update_user_profile(self, data):
-        from profiles.models import Profile
+        from profiles.models import Profile, Preference
         profile, _ = Profile.objects.get_or_create(user=self.user)
+        preference, _ = Preference.objects.get_or_create(profile=profile)
+        
         if 'full_name' in data: profile.full_name = data['full_name']
+        if 'gender' in data: profile.gender = data['gender']
         if 'occupation' in data: profile.occupation = data['occupation']
         if 'date_of_birth' in data: profile.date_of_birth = data['date_of_birth']
         if 'height' in data: profile.height = data['height']
         if 'religion' in data: profile.religion = data['religion']
         if 'expectations' in data: profile.about_me = (profile.about_me or "") + "\nExpectations: " + data['expectations']
+        
+        if 'preferred_gender' in data: preference.preferred_gender = data['preferred_gender']
+        
         profile.status = 'draft' # Ensuring it remains draft during partial saves
         profile.save()
+        preference.save()
 
     @sync_to_async
     def get_or_create_dummy_user(self):

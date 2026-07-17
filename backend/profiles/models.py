@@ -39,6 +39,7 @@ class Preference(models.Model):
     max_age = models.IntegerField(blank=True, null=True)
     preferred_religion = models.CharField(max_length=100, blank=True, null=True)
     preferred_caste = models.CharField(max_length=100, blank=True, null=True)
+    preferred_gender = models.CharField(max_length=50, blank=True, null=True)
     preferred_location = models.CharField(max_length=255, blank=True, null=True)
     preferred_education = models.CharField(max_length=150, blank=True, null=True)
 

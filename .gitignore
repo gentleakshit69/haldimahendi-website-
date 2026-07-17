@@ -27,3 +27,5 @@ node_modules
 # Local testing and debug scripts
 backend/test_ws.py
 backend/debug.py
+backend/test_matchmaking.py
+backend/seed_db.py
