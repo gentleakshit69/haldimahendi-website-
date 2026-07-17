@@ -26,6 +26,8 @@ You are an empathetic, professional, and friendly female matrimonial assistant n
 Your job is to interview the user and collect all necessary details to build their matrimonial profile.
 You should ask ONE question at a time. Be conversational, psychologically encouraging, and polite.
 Required details to collect: Full Name, Date of Birth, Profession, Height, Religion/Caste, and Partner Expectations.
+
+CRITICAL INSTRUCTION: As soon as the user provides ANY of the required details (even partially, like just their name or profession), you MUST immediately call the 'update_profile' function to save that data before you respond with your next question.
 Once you have collected all these details, kindly let them know the profile is complete.
 """
 
@@ -53,8 +55,28 @@ class AvatarOnboardingConsumer(AsyncWebsocketConsumer):
             'audio_base64': audio_base64
         }))
 
+        # Join user-specific group for real-time webhook updates
+        self.group_name = f"user_{self.user.id}"
+        await self.channel_layer.group_add(
+            self.group_name,
+            self.channel_name
+        )
+
     async def disconnect(self, close_code):
-        pass
+        if hasattr(self, 'group_name'):
+            await self.channel_layer.group_discard(
+                self.group_name,
+                self.channel_name
+            )
+
+    async def profile_updated(self, event):
+        """
+        Called when the webhook pushes an update to the user's group.
+        """
+        await self.send(text_data=json.dumps({
+            'type': 'profile_updated',
+            'payload': event['payload']
+        }))
 
     async def receive(self, text_data):
         text_data_json = json.loads(text_data)
@@ -67,19 +89,77 @@ class AvatarOnboardingConsumer(AsyncWebsocketConsumer):
         state = self.session.conversation_state
         state.append({"role": "user", "content": user_message})
         
-        # 2. Call LLM
+        # 2. Define tools
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "update_profile",
+                    "description": "Updates the user's matrimonial profile with extracted information.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "full_name": {"type": "string"},
+                            "occupation": {"type": "string"},
+                            "date_of_birth": {"type": "string", "description": "YYYY-MM-DD"},
+                            "height": {"type": "string"},
+                            "religion": {"type": "string"},
+                            "expectations": {"type": "string"}
+                        }
+                    }
+                }
+            }
+        ]
+
+        # 3. Call LLM
         try:
             response = await openai_client.chat.completions.create(
-                model="meta-llama/llama-3-8b-instruct",
-                messages=state
+                model="openai/gpt-4o-mini",
+                messages=state,
+                tools=tools,
+                tool_choice={"type": "function", "function": {"name": "update_profile"}}
             )
-            bot_reply = response.choices[0].message.content
+            response_message = response.choices[0].message
+            bot_reply = response_message.content or ""
+            
+            # 4. Handle Tool Calls
+            if response_message.tool_calls:
+                state.append(response_message.model_dump())
+                for tool_call in response_message.tool_calls:
+                    if tool_call.function.name == "update_profile":
+                        args = json.loads(tool_call.function.arguments)
+                        await self.update_user_profile(args)
+                        
+                        # Notify frontend of profile update
+                        await self.channel_layer.group_send(
+                            self.group_name,
+                            {
+                                'type': 'profile_updated',
+                                'payload': args
+                            }
+                        )
+                        
+                        state.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": json.dumps({"status": "success", "message": "Profile updated."})
+                        })
+                
+                # Get follow-up message from LLM after tool call
+                followup_response = await openai_client.chat.completions.create(
+                    model="openai/gpt-4o-mini",
+                    messages=state
+                )
+                bot_reply = followup_response.choices[0].message.content
+                state.append({"role": "assistant", "content": bot_reply})
+            else:
+                state.append({"role": "assistant", "content": bot_reply})
+                
         except Exception as e:
             print("OpenAI Error:", e)
             bot_reply = "I'm sorry, I didn't quite catch that. Could you repeat?"
+            state.append({"role": "assistant", "content": bot_reply})
 
-        # 3. Append bot reply to state and save
-        state.append({"role": "assistant", "content": bot_reply})
         self.session.conversation_state = state
         await self.save_session()
         
@@ -115,6 +195,19 @@ class AvatarOnboardingConsumer(AsyncWebsocketConsumer):
             if response.status_code == 200:
                 return base64.b64encode(response.content).decode('utf-8')
         return ""
+
+    @sync_to_async
+    def update_user_profile(self, data):
+        from profiles.models import Profile
+        profile, _ = Profile.objects.get_or_create(user=self.user)
+        if 'full_name' in data: profile.full_name = data['full_name']
+        if 'occupation' in data: profile.occupation = data['occupation']
+        if 'date_of_birth' in data: profile.date_of_birth = data['date_of_birth']
+        if 'height' in data: profile.height = data['height']
+        if 'religion' in data: profile.religion = data['religion']
+        if 'expectations' in data: profile.about_me = (profile.about_me or "") + "\nExpectations: " + data['expectations']
+        profile.status = 'draft' # Ensuring it remains draft during partial saves
+        profile.save()
 
     @sync_to_async
     def get_or_create_dummy_user(self):

@@ -20,6 +20,7 @@ This project is currently in **active development mode**. We are building a deco
 
 *   **Authentication:** Send & Verify OTP flow using a REST API.
 *   **AI Biodata Parsing:** Upload a bio-data image or PDF to extract structured JSON data via LLM (OpenAI/Google Vision).
+*   **Interactive AI Avatar:** Real-time conversational voice avatar using Beyond Presence (frontend), ElevenLabs (TTS), and OpenAI GPT-4o-mini (backend orchestration & tool calling) to autonomously interview users and extract their biodata over WebSockets.
 *   **Profile Management:** Endpoints to fetch and comprehensively update user profiles, including support for uploading multiple profile photos.
 *   **Search Engine:** Basic searching and filtering logic for profiles.
 *   **Real-time Chat:** Django Channels ASGI configuration supporting WebSocket connections, alongside REST APIs to start sessions and fetch message history.
@@ -28,13 +29,14 @@ This project is currently in **active development mode**. We are building a deco
 
 ```mermaid
 graph TD
-    Client[Next.js Frontend]
+    Client[Next.js Frontend / Beyond Presence SDK]
     
     subgraph DjangoBackend ["Django Backend"]
         REST[REST APIs]
         WS[WebSockets - Django Channels]
         DB[(SQLite Database)]
-        LLM[OpenAI/Vision API]
+        LLM[OpenAI/GPT-4o-mini]
+        TTS[ElevenLabs API]
     end
 
     Client -- HTTP Requests --> REST
@@ -42,6 +44,11 @@ graph TD
     
     REST -- Upload BioData --> LLM
     LLM -- JSON Output --> REST
+    
+    WS -- Real-time Audio/Text/Tools --> LLM
+    LLM -- Text Output --> TTS
+    TTS -- Audio Stream --> WS
+    WS -- Extracted JSON / Group Send --> DB
     
     REST -- Read/Write --> DB
     WS -- Real-time Messages --> DB

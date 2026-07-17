@@ -199,6 +199,39 @@ Based on the current APIs, the frontend needs the following pages/flows:
       "sender_id": "uuid",
       "sender_phone": "+1234567890",
       "message_content": "Hello!",
-      "sent_at": "2026-07-15T10:00:00Z"
     }
     ```
+
+### 7. Interactive AI Avatar (Beyond Presence Integration)
+*   **Endpoint:** `ws://127.0.0.1:8000/ws/avatar/onboarding/` (Ensure this routing exists in `backend/avatar/routing.py`)
+*   **Access:** Protected (Requires user authentication).
+*   **Flow Overview:**
+    1. The frontend integrates the Beyond Presence SDK for WebRTC Video streaming (the visual avatar).
+    2. We maintain full control over the AI brain. The frontend must capture user audio/text and send it to the Django WebSocket.
+    3. The frontend receives text/audio responses from Django via this WebSocket, and feeds the audio into the Beyond Presence SDK to generate the corresponding lip-sync.
+    4. As the Avatar chats, the backend LLM uses tool-calling to extract data. The WebSocket will broadcast real-time `profile_updated` events back to the frontend.
+*   **Send User Input Payload:**
+    ```json
+    {
+      "text": "I am a software engineer."
+    }
+    ```
+*   **Receive Avatar Response Payload:**
+    ```json
+    {
+      "type": "avatar_response",
+      "text": "That's great! What about your family?",
+      "audio_base64": "base64_encoded_audio_string"
+    }
+    ```
+    *(Feed this audio_base64 to the vendor SDK to play and animate the face).*
+*   **Receive Profile Update Payload (Real-time Sync):**
+    ```json
+    {
+      "type": "profile_updated",
+      "payload": {
+        "occupation": "software engineer"
+      }
+    }
+    ```
+    *(Note: When received, immediately reflect the extracted data on the UI).*

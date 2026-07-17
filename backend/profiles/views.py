@@ -160,6 +160,7 @@ def my_profile(request):
             
             return Response({
                 "profile": {
+                    "status": profile.status,
                     "full_name": profile.full_name,
                     "gender": profile.gender,
                     "hobbies": profile.hobbies,
@@ -179,6 +180,7 @@ def my_profile(request):
             data = request.data
             
             # Update Profile fields
+            if 'status' in data: profile.status = data['status']
             if 'full_name' in data: profile.full_name = data['full_name']
             if 'hobbies' in data: profile.hobbies = data['hobbies']
             if 'family_details' in data: profile.family_details = data['family_details']

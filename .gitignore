@@ -23,3 +23,7 @@ node_modules
 
 # Agent settings (local development only)
 .agents/
+
+# Local testing and debug scripts
+backend/test_ws.py
+backend/debug.py
