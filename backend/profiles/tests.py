@@ -1,4 +1,5 @@
 from django.urls import reverse
+from unittest.mock import patch
 from rest_framework import status
 from rest_framework.test import APITestCase
 from users.models import User
@@ -52,3 +53,24 @@ class ProfileTests(APITestCase):
         response = self.client.get(url, {'q': 'Alice'})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data['results']), 1)
+
+    @patch('profiles.views.process_biodata_async')
+    def test_upload_biodata_async(self, mock_process_biodata_async):
+        url = reverse('upload_biodata_async')
+        
+        # Create a dummy pdf file
+        dummy_file = tempfile.NamedTemporaryFile(suffix='.pdf', delete=False)
+        dummy_file.write(b"dummy pdf content")
+        dummy_file.seek(0)
+        
+        data = {'file': dummy_file}
+        response = self.client.post(url, data, format='multipart')
+        
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        self.assertEqual(response.data['status'], 'processing')
+        
+        # Verify background task was called
+        mock_process_biodata_async.assert_called_once()
+        
+        # Close and remove the dummy file
+        dummy_file.close()

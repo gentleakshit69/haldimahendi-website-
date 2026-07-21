@@ -19,7 +19,7 @@ This project is currently in **active development mode**. We are building a deco
 ## Implemented Features
 
 *   **Authentication:** Send & Verify OTP flow using a REST API.
-*   **AI Biodata Parsing:** Upload a bio-data image or PDF to extract structured JSON data via LLM (OpenAI/Google Vision).
+*   **AI Biodata Parsing (Drag & Drop):** Asynchronously upload a bio-data image, PDF, or Word document to extract structured JSON data via LLM (OpenAI/Google Vision). Results are pushed to the client via a dedicated notification WebSocket channel.
 *   **Interactive AI Avatar:** Real-time conversational voice avatar using Beyond Presence (frontend), ElevenLabs (TTS), and OpenAI GPT-4o-mini (backend orchestration & tool calling) to autonomously interview users and extract their biodata over WebSockets.
 *   **Profile Management:** Endpoints to fetch and comprehensively update user profiles, including support for uploading multiple profile photos.
 *   **Search Engine:** Basic searching and filtering logic for profiles.
@@ -42,8 +42,10 @@ graph TD
     Client -- HTTP Requests --> REST
     Client -- ws:// --> WS
     
-    REST -- Upload BioData --> LLM
-    LLM -- JSON Output --> REST
+    REST -- Upload BioData --> ParserTask[Background Thread]
+    ParserTask -- Call LLM/Vision APIs --> LLM
+    LLM -- JSON Output --> ParserTask
+    ParserTask -- Structured JSON --> WS
     
     WS -- Real-time Audio/Text/Tools --> LLM
     LLM -- Text Output --> TTS

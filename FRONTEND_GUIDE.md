@@ -88,29 +88,42 @@ Based on the current APIs, the frontend needs the following pages/flows:
     }
     ```
 
-### 3. Parse Biodata
-*   **Endpoint:** `POST /profile/biodata/parse/`
+### 3. Async Drag & Drop Biodata Parsing
+This is the recommended flow for uploading PDF, Word, or JPG biodatas. It runs asynchronously in the background.
+
+*   **REST Endpoint:** `POST /profile/biodata/upload/`
 *   **Access:** Protected (Requires Bearer Token)
 *   **Payload (multipart/form-data):**
-    *   `file`: The PDF or image file.
-    *   `text` (Optional): Raw text if no file is uploaded.
-*   **Response (200 OK):**
+    *   `file`: The PDF, DOCX, or Image file.
+*   **Response (202 Accepted):**
     ```json
     {
-        "status": "success",
-        "raw_extracted_text": "...",
-        "structured_data": {
-            "full_name": "John Doe",
-            "date_of_birth": "1990-01-01",
-            "height": "6'0\"",
-            "complexion": "Fair",
-            "education_level": "B.Tech",
-            "occupation": "Software Engineer",
-            "family_details": "...",
-            "expectations": "..."
-        }
+        "status": "processing",
+        "message": "File uploaded successfully. Processing in background."
     }
     ```
+
+**Receiving the Parsed Result (WebSockets):**
+*   **Endpoint:** `ws://127.0.0.1:8000/ws/notifications/`
+*   **Access:** Connect using the user's token or session.
+*   **Receive Notification Payload (Sent by backend automatically when parsing finishes):**
+    ```json
+    {
+      "type": "biodata_processed",
+      "status": "success",
+      "data": {
+        "full_name": "John Doe",
+        "date_of_birth": "1990-01-01",
+        "height": "6'0\"",
+        "complexion": "Fair",
+        "education_level": "B.Tech",
+        "occupation": "Software Engineer",
+        "family_details": "...",
+        "hobbies": "..."
+      }
+    }
+    ```
+    *(Note: When this is received on the frontend, use the `data` object to pre-fill the Profile form so the user can review and edit before saving via `PATCH /profile/me/`).*
 
 ### 3a. View My Profile
 *   **Endpoint:** `GET /profile/me/`

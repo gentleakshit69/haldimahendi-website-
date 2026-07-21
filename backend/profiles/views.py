@@ -7,7 +7,9 @@ from rest_framework.response import Response
 import PyPDF2
 from google.cloud import vision
 from openai import OpenAI
-
+import tempfile
+import uuid
+from .services.biodata_parser import process_biodata_async
 # Initialize clients (Keys should be set in environment variables)
 # os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "path/to/service-account.json"
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
@@ -108,6 +110,34 @@ def parse_biodata(request):
         'raw_extracted_text': raw_text,
         'structured_data': structured_data
     }, status=status.HTTP_200_OK)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def upload_biodata_async(request):
+    uploaded_file = request.FILES.get('file')
+    if not uploaded_file:
+        return Response({'error': 'No file provided.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    file_extension = uploaded_file.name.split('.')[-1].lower()
+    if file_extension not in ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png']:
+        return Response({'error': 'Unsupported file type. Use PDF, DOC, DOCX, JPG, or PNG.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Save to a temporary file
+    temp_dir = tempfile.gettempdir()
+    temp_file_name = f"biodata_{uuid.uuid4().hex}.{file_extension}"
+    temp_file_path = os.path.join(temp_dir, temp_file_name)
+
+    with open(temp_file_path, 'wb+') as destination:
+        for chunk in uploaded_file.chunks():
+            destination.write(chunk)
+
+    # Trigger background task
+    process_biodata_async(temp_file_path, file_extension, str(request.user.id))
+
+    return Response({
+        'status': 'processing',
+        'message': 'File uploaded successfully. Processing in background.'
+    }, status=status.HTTP_202_ACCEPTED)
 
 from .models import Profile, Preference, Photo
 from django.db.models import Q
