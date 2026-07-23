@@ -61,6 +61,9 @@ INSTALLED_APPS = [
     'profiles',
     'chat',
     'avatar',
+    
+    # CORS
+    'corsheaders',
 ]
 
 AUTH_USER_MODEL = 'users.User'
@@ -75,6 +78,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -178,3 +182,6 @@ SMS_API_ROUTE_ID = os.environ.get('SMS_API_ROUTE_ID')
 SMS_API_SENDER_ID = os.environ.get('SMS_API_SENDER_ID')
 SMS_API_TEMPLATE_ID = os.environ.get('SMS_API_TEMPLATE_ID')
 SMS_API_PE_ID = os.environ.get('SMS_API_PE_ID')
+
+# CORS Config
+CORS_ALLOW_ALL_ORIGINS = True

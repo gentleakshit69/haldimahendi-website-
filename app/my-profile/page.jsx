@@ -5,38 +5,142 @@ import Card from '@/components/ui/Card'
 import { Upload, Edit2, LogOut } from 'lucide-react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useAuthStore } from '@/store/useAuthStore'
+import { Loader } from 'lucide-react'
 
 export default function MyProfilePage() {
   const router = useRouter()
-  const [isEditing, setIsEditing] = useState(false)
+  const { accessToken, clearAuth, setProfileCompletion } = useAuthStore()
+  const [loading, setLoading] = useState(true)
+  const [uploadingDoc, setUploadingDoc] = useState(false)
   const [profileData, setProfileData] = useState({
-    name: 'John',
-    age: 28,
-    location: 'Delhi',
-    profession: 'Software Engineer',
-    religion: 'Hindu',
-    caste: 'Brahmin',
-    height: '6\'0"',
-    education: 'B.Tech',
-    bio: 'Tech enthusiast, love traveling and exploring new places',
-    about: 'Passionate software engineer with interests in AI and machine learning',
-    lookingFor: 'Looking for a partner who shares my values and interests',
-    interests: ['Technology', 'Travel', 'Sports'],
+    name: '',
+    age: '',
+    location: '',
+    profession: '',
+    religion: '',
+    height: '',
+    bio: '',
+    about: '',
+    lookingFor: '',
     photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop',
   })
 
   const [formData, setFormData] = useState(profileData)
+
+  // Fetch profile on mount
+  useEffect(() => {
+    if (!accessToken) {
+      router.push('/auth/login')
+      return
+    }
+
+    const fetchProfile = async () => {
+      try {
+        const res = await fetch('http://127.0.0.1:8000/api/v1/profile/me/', {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        })
+        if (res.ok) {
+          const data = await res.json()
+          const p = data.profile || {}
+          const newProfile = {
+            name: p.full_name || '',
+            profession: p.occupation || '',
+            about: p.about_me || '',
+            bio: p.hobbies || '', // mapping hobbies to bio visually
+            age: '', // not returned currently
+            location: '',
+            religion: '',
+            height: '',
+            lookingFor: data.preferences?.preferred_religion || '',
+            photo: data.photos?.length ? `http://127.0.0.1:8000${data.photos[0].url}` : profileData.photo
+          }
+          setProfileData(newProfile)
+          setFormData(newProfile)
+
+          // Calculate Completion
+          const fields = [newProfile.name, newProfile.profession, newProfile.about, newProfile.bio]
+          const filled = fields.filter(f => f && f.trim() !== '').length
+          setProfileCompletion(Math.round((filled / fields.length) * 100))
+        }
+      } catch (e) {
+        console.error("Failed to fetch profile", e)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchProfile()
+  }, [accessToken, router, setProfileCompletion])
 
   const handleChange = (e) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
   }
 
-  const handleSave = () => {
-    setProfileData(formData)
-    setIsEditing(false)
-    alert('Profile updated successfully!')
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingDoc(true)
+
+    const fd = new FormData()
+    fd.append('file', file)
+
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/v1/profile/biodata/parse/', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+        body: fd
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const parsed = data.structured_data || {}
+        setFormData(prev => ({
+          ...prev,
+          name: parsed.full_name || prev.name,
+          profession: parsed.occupation || prev.profession,
+          height: parsed.height || prev.height
+        }))
+        setIsEditing(true)
+        alert('Biodata parsed successfully! Review the extracted fields.')
+      }
+    } catch (e) {
+      alert("Upload failed")
+    } finally {
+      setUploadingDoc(false)
+    }
+  }
+
+  const handleSave = async () => {
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/v1/profile/me/', {
+        method: 'PATCH',
+        headers: { 
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          full_name: formData.name,
+          occupation: formData.profession,
+          about_me: formData.about,
+          hobbies: formData.bio,
+          status: 'completed'
+        })
+      })
+
+      if (res.ok) {
+        setProfileData(formData)
+        setIsEditing(false)
+        alert('Profile updated successfully!')
+        
+        // Recalculate
+        const fields = [formData.name, formData.profession, formData.about, formData.bio]
+        const filled = fields.filter(f => f && f.trim() !== '').length
+        setProfileCompletion(Math.round((filled / fields.length) * 100))
+      }
+    } catch (e) {
+      alert("Failed to save profile")
+    }
   }
 
   const handleCancel = () => {
@@ -45,22 +149,34 @@ export default function MyProfilePage() {
   }
 
   const handleLogout = () => {
+    clearAuth()
     router.push('/auth/login')
   }
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader className="animate-spin w-8 h-8"/></div>
 
   return (
     <div className="min-h-screen bg-background pt-20">
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-4xl font-bold text-foreground">My Profile</h1>
-          <Button
-            onClick={handleLogout}
-            variant="danger"
-            size="md"
-          >
-            <LogOut className="w-5 h-5 mr-2" />
-            Logout
-          </Button>
+          <div className="flex gap-4">
+            <label className="cursor-pointer">
+              <input type="file" className="hidden" onChange={handleFileUpload} accept=".pdf,.png,.jpg,.jpeg" />
+              <Button as="span" variant="outline" size="md">
+                {uploadingDoc ? <Loader className="w-5 h-5 mr-2 animate-spin" /> : <Upload className="w-5 h-5 mr-2" />}
+                {uploadingDoc ? "Parsing AI..." : "Upload Biodata"}
+              </Button>
+            </label>
+            <Button
+              onClick={handleLogout}
+              variant="danger"
+              size="md"
+            >
+              <LogOut className="w-5 h-5 mr-2" />
+              Logout
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

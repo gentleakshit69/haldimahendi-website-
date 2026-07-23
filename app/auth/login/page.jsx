@@ -3,55 +3,76 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
 import Button from '@/components/ui/Button';
-import { Mail, Lock, ArrowRight, Loader } from 'lucide-react';
+import { Phone, KeyRound, ArrowRight, Loader } from 'lucide-react';
+import { useAuthStore } from '@/store/useAuthStore';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-  });
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [otp, setOtp] = useState('');
+  const [step, setStep] = useState('phone'); // 'phone' | 'otp'
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { setTokens } = useAuthStore();
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleLogin = async (e) => {
+  const handlePhoneSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      if (!formData.email || !formData.password) {
-        throw new Error('Email and password are required');
-      }
+      if (!phoneNumber) throw new Error('Phone number is required');
 
-      const { data, error: loginError } = await supabase.auth.signInWithPassword({
-        email: formData.email,
-        password: formData.password,
-      });
-
-      if (loginError) throw loginError;
-
-      // Update last login
-      await fetch('/api/auth/update-login', {
+      const response = await fetch('http://127.0.0.1:8000/api/v1/auth/send-otp/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ supabaseId: data.user.id }),
+        body: JSON.stringify({ phone_number: phoneNumber }),
       });
 
-      // Redirect to dashboard
-      setTimeout(() => {
-        router.push('/dashboard');
-      }, 500);
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to send OTP');
+      }
+
+      setStep('otp');
     } catch (err) {
-      setError(err.message || 'Login failed');
-      console.error('[v0] Login error:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOtpSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      if (!otp) throw new Error('OTP is required');
+
+      const response = await fetch('http://127.0.0.1:8000/api/v1/auth/verify-otp/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone_number: phoneNumber, otp }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Invalid OTP');
+      }
+
+      setTokens(data.access, data.refresh);
+
+      // Redirect logic
+      if (data.is_new_user) {
+        router.push('/profile/setup');
+      } else {
+        router.push('/matches');
+      }
+    } catch (err) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -72,7 +93,7 @@ export default function LoginPage() {
         <div className="bg-card border border-border rounded-2xl shadow-lg p-8 backdrop-blur-sm">
           <h2 className="text-2xl font-bold mb-6">Login to Your Account</h2>
 
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={step === 'phone' ? handlePhoneSubmit : handleOtpSubmit} className="space-y-4">
             {/* Error Message */}
             {error && (
               <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
@@ -80,57 +101,52 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-medium mb-2">Email</label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-3 w-5 h-5 text-muted-foreground" />
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  placeholder="your@email.com"
-                  className="w-full pl-10 pr-4 py-2 rounded-lg border border-border bg-input focus:outline-none focus:ring-2 focus:ring-primary"
-                  disabled={loading}
-                />
+            {/* Phone Number */}
+            {step === 'phone' && (
+              <div>
+                <label className="block text-sm font-medium mb-2">Phone Number</label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-3 w-5 h-5 text-muted-foreground" />
+                  <input
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="+919876543210"
+                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-border bg-input focus:outline-none focus:ring-2 focus:ring-primary"
+                    disabled={loading}
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Password */}
-            <div>
-              <label className="block text-sm font-medium mb-2">Password</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 w-5 h-5 text-muted-foreground" />
-                <input
-                  type="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  placeholder="••••••••"
-                  className="w-full pl-10 pr-4 py-2 rounded-lg border border-border bg-input focus:outline-none focus:ring-2 focus:ring-primary"
-                  disabled={loading}
-                />
+            {/* OTP */}
+            {step === 'otp' && (
+              <div>
+                <label className="block text-sm font-medium mb-2">Enter OTP</label>
+                <div className="relative">
+                  <KeyRound className="absolute left-3 top-3 w-5 h-5 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                    placeholder="123456"
+                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-border bg-input focus:outline-none focus:ring-2 focus:ring-primary tracking-widest text-center"
+                    disabled={loading}
+                  />
+                </div>
               </div>
-            </div>
-
-            {/* Forgot Password */}
-            <div className="text-right">
-              <Link href="/auth/forgot-password" className="text-sm text-primary hover:underline">
-                Forgot password?
-              </Link>
-            </div>
+            )}
 
             {/* Submit Button */}
             <Button variant="primary" size="lg" className="w-full mt-6" disabled={loading}>
               {loading ? (
                 <>
                   <Loader className="w-4 h-4 mr-2 animate-spin" />
-                  Logging in...
+                  {step === 'phone' ? 'Sending OTP...' : 'Verifying...'}
                 </>
               ) : (
                 <>
-                  Login
+                  {step === 'phone' ? 'Send OTP' : 'Verify & Login'}
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </>
               )}

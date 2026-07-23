@@ -37,6 +37,12 @@ def send_otp(request):
     # Prepare SMS API payload
     msg_template = f"Dear Member, Your client login account OTP is {otp_code} It will expire in Five minutes. Do not share it with anyone. Thanks, -Webczar"
     
+    # Local Testing Bypass
+    if phone_number.startswith("+919999999") or phone_number == "+910000000000":
+        logger.info(f"MOCK OTP generated for {phone_number}: {otp_code}")
+        print(f"\n[LOCAL TEST] MOCK OTP for {phone_number}: {otp_code}\n")
+        return Response({'status': 'OTP sent successfully (Mocked).', 'mock_otp': otp_code}, status=status.HTTP_200_OK)
+
     params = {
         'key': settings.SMS_API_KEY,
         'campaign': settings.SMS_API_CAMPAIGN,

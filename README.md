@@ -7,29 +7,23 @@ This project is currently in **active development mode**. We are building a deco
 ## Architecture
 
 *   **Backend:** Django (Python) - Serves as the API provider.
-*   **Frontend:** Next.js (React) - Consumes the API and provides the user interface.
+*   **Frontend:** Next.js (React) - Consumes the API and provides the user interface using Tailwind CSS v4, Shadcn UI, and Redux Toolkit.
 *   **Database:** SQLite - Currently used for rapid local development. We will switch to a more robust database (like PostgreSQL or MySQL) in the future for staging/production deployments.
-
-## Development Workflow
-
-1.  **AI-Assisted Development:** We are leveraging AI tools to rapidly prototype, develop, and test new APIs and features.
-2.  **Frontend/Backend Decoupling:** The frontend developer will exclusively use the `FRONTEND_GUIDE.md` for integrating with the backend. They do not need to understand Django internals.
-3.  **Future Deployment:** Once features are stable locally, they will be showcased and then migrated to a production-ready environment.
 
 ## Implemented Features
 
-*   **Authentication:** Send & Verify OTP flow using a REST API.
-*   **AI Biodata Parsing (Drag & Drop):** Asynchronously upload a bio-data image, PDF, or Word document to extract structured JSON data via LLM (OpenAI/Google Vision). Results are pushed to the client via a dedicated notification WebSocket channel.
-*   **Interactive AI Avatar:** Real-time conversational voice avatar using Beyond Presence (frontend), ElevenLabs (TTS), and OpenAI GPT-4o-mini (backend orchestration & tool calling) to autonomously interview users and extract their biodata over WebSockets.
+*   **Authentication:** Send & Verify OTP flow using a REST API (using JWTs managed in Redux).
+*   **AI Biodata Parsing (Drag & Drop):** Asynchronously upload a bio-data image, PDF, or Word document to extract structured JSON data via LLM.
 *   **Profile Management:** Endpoints to fetch and comprehensively update user profiles, including support for uploading multiple profile photos.
-*   **Search Engine:** Basic searching and filtering logic for profiles.
-*   **Real-time Chat:** Django Channels ASGI configuration supporting WebSocket connections, alongside REST APIs to start sessions and fetch message history.
+*   **Search Engine:** Basic searching and filtering logic for profiles in the matchmaking dashboard.
+*   **Real-time Chat (Pending):** Django Channels ASGI configuration supporting WebSocket connections.
+*   **Interactive AI Avatar (Pending):** Real-time conversational voice avatar using Beyond Presence (frontend), ElevenLabs (TTS), and OpenAI.
 
 ## Architecture & System Flow
 
 ```mermaid
 graph TD
-    Client[Next.js Frontend / Beyond Presence SDK]
+    Client[Next.js Frontend]
     
     subgraph DjangoBackend ["Django Backend"]
         REST[REST APIs]
@@ -56,76 +50,6 @@ graph TD
     WS -- Real-time Messages --> DB
 ```
 
-## Database Schema (ER Diagram)
-
-```mermaid
-erDiagram
-    USER ||--o{ OTP_VERIFICATION : "requests"
-    USER ||--o| PROFILE : "has"
-    USER ||--o{ CHAT_SESSION : "participates (as user_one or user_two)"
-    USER ||--o{ CHAT_MESSAGE : "sends"
-    
-    PROFILE ||--o| PREFERENCE : "has matchmaking"
-    PROFILE ||--o{ PHOTO : "has multiple"
-    
-    CHAT_SESSION ||--o{ CHAT_MESSAGE : "contains"
-    
-    USER {
-        int id PK
-        string phone_number
-        boolean is_verified
-    }
-    
-    OTP_VERIFICATION {
-        int id PK
-        int user_id FK
-        string otp_code
-        boolean is_used
-        datetime expires_at
-    }
-    
-    PROFILE {
-        uuid id PK
-        int user_id FK
-        string full_name
-        string gender
-        string hobbies
-        text family_details
-        string occupation
-    }
-    
-    PREFERENCE {
-        uuid id PK
-        uuid profile_id FK
-        int min_age
-        int max_age
-        string preferred_religion
-    }
-    
-    PHOTO {
-        uuid id PK
-        uuid profile_id FK
-        string image_url
-        boolean is_primary
-    }
-    
-    CHAT_SESSION {
-        uuid id PK
-        int user_one_id FK
-        int user_two_id FK
-        datetime created_at
-    }
-    
-    CHAT_MESSAGE {
-        uuid id PK
-        uuid session_id FK
-        int sender_id FK
-        text message_content
-        boolean is_read
-        datetime sent_at
-    }
-```
-
 ## Getting Started (Local Development)
 
 ### Prerequisites
@@ -137,7 +61,7 @@ erDiagram
 
 1.  Navigate to the `backend` directory.
 2.  Activate the virtual environment: `.\venv\Scripts\activate` (Windows)
-3.  Install dependencies (if new ones were added): `pip install -r requirements.txt`
+3.  Install dependencies: `pip install -r requirements.txt` (Make sure to run `pip install django-cors-headers python-docx` if missing)
 4.  Create a `.env` file in the `backend/` directory and configure the SMS API credentials:
     ```env
     SMS_API_URL=https://login.smsmedia.org/app/smsapi/index.php
@@ -149,14 +73,43 @@ erDiagram
     SMS_API_PE_ID=your_pe_id
     ```
 5.  Run migrations: `python manage.py migrate`
-6.  Start the server: `python manage.py runserver`
+6.  Start the server: `python manage.py runserver` (Runs on `http://127.0.0.1:8000`)
 
 ### Frontend Setup
 
 1.  Navigate to the `frontend` directory.
 2.  Install dependencies: `npm install`
-3.  Start the development server: `npm run dev`
+3.  Create a `.env.local` file in the `frontend/` directory:
+    ```env
+    NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1/
+    ```
+4.  Start the development server: `npm run dev` (Usually runs on `http://localhost:3001` or `3000`)
 
-## Resources
+---
 
-*   `FRONTEND_GUIDE.md`: The primary resource for the frontend team regarding API contracts and integration details.
+## API Reference Guide
+
+### 1. Authentication: Send OTP
+*   **Endpoint:** `POST /api/v1/auth/send-otp/`
+*   **Payload:** `{"phone_number": "+1234567890"}`
+*   **Note:** Using `+910000000000` will return a `mock_otp` in the JSON response for local testing.
+
+### 2. Authentication: Verify OTP
+*   **Endpoint:** `POST /api/v1/auth/verify-otp/`
+*   **Payload:** `{"phone_number": "+1234567890", "otp": "123456"}`
+*   **Response:** `{ "access": "jwt", "refresh": "jwt", "is_new_user": true }`
+
+### 3. Biodata Upload
+*   **Endpoint:** `POST /api/v1/profile/biodata/upload/`
+*   **Payload (multipart/form-data):** `file`: The `.docx` or PDF file.
+
+### 4. View My Profile
+*   **Endpoint:** `GET /api/v1/profile/me/`
+*   **Response:** Detailed parsed information of the user.
+
+### 5. Search Profiles / Matchmaking Dashboard
+*   **Endpoint:** `GET /api/v1/matches/search/?q=term` OR `GET /api/v1/matches/recommended/`
+*   **Response:** List of matching users.
+
+### 6. Chat WebSockets (Upcoming)
+*   **Endpoint:** `ws://127.0.0.1:8000/ws/chat/<session_id>/`
